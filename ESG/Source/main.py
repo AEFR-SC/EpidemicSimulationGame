@@ -85,7 +85,6 @@ def isActionTime(lastTime, interval):
     currentTime = time.time()
     return currentTime - lastTime >= interval
 
-
 # 游戏变量
 class GameVar(object):
     STATES = {"START": 0, "LOGIN": 2, "RUNNING": 3, "PAUSE": 4, "WIN": 5, "LOSE": 6}
