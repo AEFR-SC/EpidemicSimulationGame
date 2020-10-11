@@ -81,6 +81,11 @@ def isMouseIn(x, y):
 
 
 def isActionTime(lastTime, interval):
+    currentTime = time.time()
+    return currentTime - lastTime >= interval
+
+
+def isActionTime_2(lastTime, interval):
     if lastTime == 0:
         return True
     currentTime = time.time()
@@ -232,8 +237,9 @@ class Peoples(CharacterObject):
 
     def eruption(self):
         if self.colour == 1:
-            incubation_period = random.randint(0, 14)
-            if not isActionTime(self.eruption_lastTime, incubation_period * one_day):
+            incubation_period = random.randint(7, 14)
+
+            if not isActionTime_2(self.eruption_lastTime, incubation_period * one_day):
                 return
             else:
                 self.eruption_lastTime = time.time()
@@ -242,7 +248,7 @@ class Peoples(CharacterObject):
 
     def go_to_hospital(self):
         if not self.in_hospital:
-            if not isActionTime(self.go_to_hospital_lastTime, GameVar.hospitalResponsiveness):
+            if not isActionTime_2(self.go_to_hospital_lastTime, GameVar.hospitalResponsiveness):
                 return
             self.go_to_hospital_lastTime = time.time()
             self.will_go_hospital = True
