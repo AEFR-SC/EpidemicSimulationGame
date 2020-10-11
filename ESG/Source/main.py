@@ -85,12 +85,20 @@ def isActionTime(lastTime, interval):
     currentTime = time.time()
     return currentTime - lastTime >= interval
 
+
+def write(text, pos, size, colour=(0, 0, 0), font="微软雅黑"):
+    Fonts = pygame.font.SysFont(font, size)
+    MyFont = Fonts.render(text, True, colour)
+    canvas.blit(MyFont, pos)
+
+
 # 游戏变量
 class GameVar(object):
     STATES = {"START": 0, "LOGIN": 2, "RUNNING": 3, "PAUSE": 4, "WIN": 5, "LOSE": 6}
     state = STATES["START"]
     RO = 4
     peoples = []
+    patients = []
     doctors = []
     paintLastTime = 0
     paintInterval = 0.1
@@ -146,6 +154,10 @@ class Doctor(CharacterObject):
     def __init__(self, x, y, width, weight):
         super().__init__(x, y, width, weight, "dh")
         self.attribute = self.attributeDict["Doctor"]["Health"]
+
+    def move(self, step, direction=random.randint(0, 1)):
+        if direction == 0: self.y -= step
+        if direction == 1: self.y += step
 
 
 class Peoples(CharacterObject):
@@ -245,9 +257,9 @@ def generate(number=1):
             if attr <= 30:
                 GameVar.peoples.append(Peoples(x, y, 20, 20, "green"))
             elif attr <= 45:
-                GameVar.peoples.append(Peoples(x, y, 20, 20, "yellow"))
+                GameVar.patients.append(Peoples(x, y, 20, 20, "yellow"))
             elif attr <= 50:
-                GameVar.peoples.append(Peoples(x, y, 20, 20, "red"))
+                GameVar.patients.append(Peoples(x, y, 20, 20, "red"))
 
         else:
             dx = 70 - 20
@@ -263,6 +275,10 @@ def componentPaint():
     canvas.blit(GameVar.bg, (0, 0))
     for people in GameVar.peoples:
         people.paint()
+    for patient in GameVar.patients:
+        patient.paint()
+    for doctor in GameVar.doctors:
+        doctor.paint()
     pygame.display.update()
 
 
@@ -271,13 +287,14 @@ def componentMove():
     for people in GameVar.peoples:
         directions = [0, 1, 2, 3]  # 0.left, 1.right, 2.up, 3.down
         direction = random.choice(directions)
-        """
-        if people.x <= bgWidth - 50 - 20: direction = 0
-        if people.x <= 70: direction = 1
-        if people.y >= bgHeight - 20: direction = 2
-        if people.y <= 20: direction = 3
-        """
         people.move(direction)
+    for patient in GameVar.patients:
+        directions = [0, 1, 2, 3]  # 0.left, 1.right, 2.up, 3.down
+        direction = random.choice(directions)
+        patient.move(direction)
+    for doctor in GameVar.doctors:
+        directions = [0, 1]
+        doctor.move(random.randint(0, 1), random.choice(directions))
 
 
 def controlState():
