@@ -41,6 +41,7 @@ canvas.fill((255, 255, 255))
 pygame.display.set_caption("疫情模拟游戏ESG")
 bg_path = "..\\data\\images\\bg.png"
 bg = pygame.image.load(bg_path)
+one_day = 20
 
 
 # 设置退出方式以及键鼠交互
@@ -52,7 +53,7 @@ def handleEvent():
                 pygame.quit()
                 sys.exit()
             else:
-                pass
+                ...
 
         if event.type == MOUSEMOTION:
             if isMouseIn(event.pos[0], event.pos[1]):
@@ -100,8 +101,14 @@ class GameVar(object):
     peoples = []
     patients = []
     doctors = []
+    symptoms = []
+    asymptomatic = []
+    for patient in patients:
+        if patient.colour == 1: asymptomatic.append(1)
+        if patient.colour == 2: symptoms.append(1)
     paintLastTime = 0
     paintInterval = 0.1
+    hospitalResponsiveness = 2*one_day
     bg = bg
 
 
@@ -110,14 +117,19 @@ class CharacterObject(object):
     """所有人物的父类"""
 
     def __init__(self, x, y, width, height, colour):
-        self.attributeDict = {"People": {"Health": 0, "Symptoms": 1, "Asymptomatic": 2},
+        self.attributeDict = {"People": {"Health": 0, "Symptoms": 1, "Asymptomatic": 2, "Death": 5},
                               "Doctor": {"Health": 3, "Symptoms": 4}}
         self.x = x
         self.y = y
         self.width = width
         self.height = height
+        self.life = 3000
+        self.immunity = random.randint(500, 1000)
+        self.defensive = self.life + self.immunity
+        self.can_infectOther = True
+        self.infectedPeoples = 0
         self.attribute = self.attributeDict["People"]["Health"]
-        self.colourDict = {"green": 0, "yellow": 1, "red": 2, "dh": 3, "ds": 4}
+        self.colourDict = {"green": 0, "yellow": 1, "red": 2, "dh": 3, "ds": 4, "death": 5}
         self.colour = self.colourDict[colour]
         # 通过colour确定attribute以及image_path
         if colour == 0:
@@ -142,6 +154,20 @@ class CharacterObject(object):
     def paint(self):
         canvas.blit(self.load_image, (self.x, self.y))
 
+    def reset_pos(self):
+        if self.x <= 70: self.x = random.randint(90, bgWidth - 50 - 20 - 20)
+        if self.x >= bgWidth - 50 - 20: self.x = random.randint(90, bgWidth - 50 - 20 - 20)
+        if self.y <= 20: self.y = random.randint(50, bgHeight - 50)
+        if self.y >= bgHeight - 20: self.y = random.randint(50, bgHeight - 50)
+
+    def CanInfectOther_qm(self):  # qm: question mark
+        if self.infectedPeoples == GameVar.RO:
+            self.can_infectOther = False
+
+    def reloadImage(self):
+        self.image_path = self.image_path = "..\\data\\images\\" + str(self.colour) + ".png"
+        self.load_image = pygame.image.load(self.image_path)
+
     def move(self, direction):
         step = random.randint(0, 20)
         if direction == 0: self.x -= step  # left
@@ -149,20 +175,66 @@ class CharacterObject(object):
         if direction == 2: self.y -= step  # up
         if direction == 3: self.y += step  # down
 
+    def componentInfect(self):
+        if self.life == 0:
+            self.colour = self.colourDict["death"]
+            self.reloadImage()
+
 
 class Doctor(CharacterObject):
     def __init__(self, x, y, width, weight):
         super().__init__(x, y, width, weight, "dh")
         self.attribute = self.attributeDict["Doctor"]["Health"]
+        self.immunity = 50000
 
     def move(self, step, direction=random.randint(0, 1)):
         if direction == 0: self.y -= step
         if direction == 1: self.y += step
 
+    def reset_pos(self):
+        if self.y <= 0: self.y = bgHeight / 2 - self.y
+        if self.y >= bgHeight: self.y = bgHeight / 2 - self.y
+
+    def heal(self):
+        ...
+
 
 class Peoples(CharacterObject):
     def __init__(self, x, y, width, height, colour):
         super().__init__(x, y, width, height, colour)
+
+    def componentInfect(self):
+        if self.can_infectOther:
+            probability = 0.8
+        else:
+            probability = 0.0001
+
+        if self.colour == 1 or self.colour == 2:
+            self.immunity -= 1
+        for people in GameVar.peoples:
+            if self.hit(people):
+                infected_probability = random.random()
+                if infected_probability <= probability:
+                    people.colour = 1
+                    self.infectedPeoples += 1
+                    people.reloadImage()
+                    self.CanInfectOther_qm()
+                    GameVar.patients.append(people)
+                    GameVar.peoples.remove(people)
+                else:
+                    ...
+
+    def eruption(self):
+        if self.colour == 1:
+            incubation_period = random.randint(0, 14)
+            if not isActionTime(time.time(), incubation_period * one_day):
+                return
+            else:
+                self.colour = 2
+                self.reloadImage()
+
+    def go_to_hospital(self):
+        if not
 
 
 """
@@ -249,7 +321,7 @@ def login():
 def generate(number=1):
     """生成人物"""
     for num in range(number):
-        x = random.randint(0 + 70, bgWidth - 50 - 20)  # TODO:左边留70做医院, 右边留50当做隔离区, 右边减去20是因为圆点大小
+        x = random.randint(0 + 70, bgWidth - 50 - 20)  # TODO:左边留70做医院, 右边留50当做隔离区, 右边再减去20是因为圆点大小
         y = random.randint(0 + 20, bgHeight - 20)  # TODO：上面20是数据区
         attribute = random.randint(0, 50)
         if attribute <= 48:
@@ -274,10 +346,13 @@ def componentPaint():
     GameVar.paintLastTime = time.time()
     canvas.blit(GameVar.bg, (0, 0))
     for people in GameVar.peoples:
+        people.reset_pos()
         people.paint()
     for patient in GameVar.patients:
+        patient.reset_pos()
         patient.paint()
     for doctor in GameVar.doctors:
+        doctor.reset_pos()
         doctor.paint()
     pygame.display.update()
 
@@ -294,7 +369,26 @@ def componentMove():
         patient.move(direction)
     for doctor in GameVar.doctors:
         directions = [0, 1]
-        doctor.move(random.randint(0, 1), random.choice(directions))
+        doctor.move(random.randint(0, 10), random.choice(directions))
+
+
+def showData():
+    symptoms = []
+    asymptomatic = []
+    for patient in GameVar.patients:
+        if patient.colour == 1: asymptomatic.append(1)
+        if patient.colour == 2: symptoms.append(1)
+    write("health:{}".format(len(GameVar.peoples)), (70, 0), 40, (0, 255, 0))
+    write("patients:{}".format(len(GameVar.patients)), (200, 0), 40, (130, 130, 0))
+    write("symptoms:{}".format(len(symptoms)), (400, 0), 40, (127, 127, 0))
+    write("asymptomatic:{}".format(len(asymptomatic)), (600, 0), 40, (255, 0, 0))
+    write("doctors:{}".format(len(GameVar.doctors)), (850, 0), 40, (0, 0, 255))
+
+
+def ChangingProperties():
+    for patient in GameVar.patients:
+        patient.componentInfect()
+        patient.eruption()
 
 
 def controlState():
@@ -316,6 +410,8 @@ def controlState():
         handleEvent()
         componentPaint()
         componentMove()
+        ChangingProperties()
+        showData()
     if GameVar.state == GameVar.STATES["PAUSE"]:
         componentPaint()
 
@@ -323,8 +419,10 @@ def controlState():
 def testFunction():
     generate(100)
     while True:
+        showData()
         componentPaint()
         componentMove()
+        ChangingProperties()
         pygame.display.update()
         handleEvent()
 
@@ -333,7 +431,7 @@ demoName = "test"
 if demoName == "__main__":
     generate(50)
     while True:
-        pygame.display.update()
+        pygame.display.update(0.1)
         handleEvent()
         controlState()
 
