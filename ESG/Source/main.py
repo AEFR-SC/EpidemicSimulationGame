@@ -108,7 +108,9 @@ class GameVar(object):
         if patient.colour == 2: symptoms.append(1)
     paintLastTime = 0
     paintInterval = 0.1
-    hospitalResponsiveness = 2*one_day
+    hospitalResponsiveness = 2 * one_day
+    hospitalQueue = []
+    hospitalBeds = 12
     bg = bg
 
 
@@ -128,6 +130,8 @@ class CharacterObject(object):
         self.defensive = self.life + self.immunity
         self.can_infectOther = True
         self.infectedPeoples = 0
+        self.will_go_hospital = False
+        self.in_hospital = False
         self.attribute = self.attributeDict["People"]["Health"]
         self.colourDict = {"green": 0, "yellow": 1, "red": 2, "dh": 3, "ds": 4, "death": 5}
         self.colour = self.colourDict[colour]
@@ -202,12 +206,14 @@ class Doctor(CharacterObject):
 class Peoples(CharacterObject):
     def __init__(self, x, y, width, height, colour):
         super().__init__(x, y, width, height, colour)
+        self.go_to_hospital_lastTime = 0
+        self.eruption_lastTime = 0
 
     def componentInfect(self):
         if self.can_infectOther:
             probability = 0.8
         else:
-            probability = 0.0001
+            probability = 0
 
         if self.colour == 1 or self.colour == 2:
             self.immunity -= 1
@@ -227,14 +233,37 @@ class Peoples(CharacterObject):
     def eruption(self):
         if self.colour == 1:
             incubation_period = random.randint(0, 14)
-            if not isActionTime(time.time(), incubation_period * one_day):
+            if not isActionTime(self.eruption_lastTime, incubation_period * one_day):
                 return
             else:
+                self.eruption_lastTime = time.time()
                 self.colour = 2
                 self.reloadImage()
 
     def go_to_hospital(self):
-        if not
+        if not self.in_hospital:
+            if not isActionTime(self.go_to_hospital_lastTime, GameVar.hospitalResponsiveness):
+                return
+            self.go_to_hospital_lastTime = time.time()
+            self.will_go_hospital = True
+            GameVar.hospitalQueue.append(self)
+
+
+class Hospital(object):
+    def __init__(self):
+        self.queue = GameVar.hospitalQueue
+        self.responsiveness = GameVar.hospitalResponsiveness
+        self.beds = GameVar.hospitalBeds
+        self.accept_lastTime = 0
+        self.patients = []
+
+    def accept(self):
+        if not isActionTime(self.accept_lastTime, self.responsiveness):
+            return
+        if len(GameVar.hospitalQueue):
+            self.patients.append(GameVar.hospitalQueue.pop(0))
+            for patient in self.patients:
+                patient.x, patient.y = bgWidth, bgHeight
 
 
 """
@@ -318,6 +347,9 @@ def login():
     return "RUNNING"
 
 
+hospital = Hospital()
+
+
 def generate(number=1):
     """生成人物"""
     for num in range(number):
@@ -389,6 +421,8 @@ def ChangingProperties():
     for patient in GameVar.patients:
         patient.componentInfect()
         patient.eruption()
+        patient.go_to_hospital()
+    hospital.accept()
 
 
 def controlState():
