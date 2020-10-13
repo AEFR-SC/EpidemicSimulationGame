@@ -90,6 +90,14 @@ def isActionTime_2(lastTime, interval):
         return True
     currentTime = time.time()
     return currentTime - lastTime >= interval
+    
+def wait(interval):
+    lastTime = time.time()
+    while True:
+        Now = time.time()
+        if Now - lastTime >= interval:
+            return True
+    return True
 
 
 def write(text, pos, size, colour=(0, 0, 0), font="微软雅黑"):
@@ -238,13 +246,10 @@ class Peoples(CharacterObject):
     def eruption(self):
         if self.colour == 1:
             incubation_period = random.randint(7, 14)
-
-            if not isActionTime_2(self.eruption_lastTime, incubation_period * one_day):
-                return
-            else:
-                self.eruption_lastTime = time.time()
-                self.colour = 2
-                self.reloadImage()
+            wait(incubation_period * one_day)   
+            self.eruption_lastTime = time.time()
+            self.colour = 2
+            self.reloadImage()
 
     def go_to_hospital(self):
         if not self.in_hospital:

@@ -2,7 +2,9 @@
 
 ESG，全称EpidemicSimulationGame，即传染病模拟游戏。
 
+## 下载地址
 
+[默认下载](https://github.com/Choctocatina/EpidemicSimulationGame/archive/master.zip)
 
 ## 灵感来源
 
