@@ -57,11 +57,11 @@ def handleEvent():
 
         if event.type == MOUSEMOTION:
             if isMouseIn(event.pos[0], event.pos[1]):
-                print('MouseIn')
+                # print('MouseIn')
                 if GameVar.state == GameVar.STATES['PAUSE']:
                     GameVar.state = GameVar.STATES['RUNNING']
             if isMouseOut(event.pos[0], event.pos[1]):
-                print('MouseOut')
+                # print('MouseOut')
                 if GameVar.state == GameVar.STATES['RUNNING']:
                     GameVar.state = GameVar.STATES['PAUSE']
 
@@ -133,8 +133,8 @@ class CharacterObject(object):
         self.y = y  # y坐标
         self.width = width  # 宽
         self.height = height  # 高
-        self.life = 300  # 基础生命值
-        self.immunity = random.randint(50, 100)  # 免疫力
+        self.life = 3000  # 基础生命值
+        self.immunity = random.randint(500, 1000)  # 免疫力
         self.defensive = self.life + self.immunity  # 总防御值
         self.can_infectOther = True  # 能否感染他人
         self.infectedPeoples = 0  # 被self感染的人数
@@ -146,13 +146,16 @@ class CharacterObject(object):
         self.attribute = self.attributeDict["People"]["Health"]  # 属性
         self.colourDict = {"green": 0, "yellow": 1, "red": 2, "dh": 3, "ds": 4, "death": 5}  # 储存不同颜色
         self.colour = self.colourDict[colour]  # 确定颜色
+        self.init_colour = self.colour
         # 通过colour确定attribute以及image_path
         if colour == 0:
             self.attribute = self.attributeDict["People"]["Health"]
         if colour == 1:
             self.attribute = self.attributeDict["People"]["Asymptomatic"]
+            self.infectedTime = time.time()
         if colour == 2:
             self.attribute = self.attributeDict["People"]["Symptoms"]
+            self.infectedTime = time.time()
         if colour == 3:
             self.attribute = self.attributeDict["Doctor"]["Health"]
         if colour == 4:
@@ -195,11 +198,14 @@ class CharacterObject(object):
             self.colour = self.colourDict["death"]
             self.reloadImage()
 
-    def Changlife(self):  # 如果被感染不断减少life
-        if not isActionTime(self.life_decline_lastTime, 1):
-            return
-        self.life_decline_lastTime = time.time()
-        self.immunity -= 1  # TODO 当immunity为负数时同样适用，因为即使不减life但是依然减少了defensive
+    def Changlife(self):  # 如果被感染不断减少life 健康者不断自我“回血”
+        if isActionTime(self.life_decline_lastTime, 1):
+            self.life_decline_lastTime = time.time()
+            self.immunity -= 1  # TODO 当immunity为负数时同样适用，因为即使不减life但是依然减少了defensive
+
+        if isActionTime(self.rehabilitate_lastTime, 3):
+            self.rehabilitate_lastTime = time.time()
+            self.life += 1
 
 
 class Doctor(CharacterObject):
@@ -231,11 +237,29 @@ class Peoples(CharacterObject):
         self.go_to_hospital_lastTime = 0
         self.eruption_lastTime = 0
 
-    def componentInfect(self):
+    def _pe_I_am_patient_qm(self):
+        if self.colour == 1 or self.colour == 2 and self.init_colour == 0:
+            self.infectedTime = time.time()
+            self.init_colour = -1  # init_colour用不到了
+            print(self.init_colour)
+            return True
+        elif self.init_colour == -1:
+            return True
+
+    def pa_eruption(self):
+        if self._pe_I_am_patient_qm():
+            incubation_period = random.randint(1, 3)
+            if isActionTime(self.infectedTime, incubation_period * one_day):
+                print(isActionTime(self.infectedTime, incubation_period * one_day))
+                self.colour = 2
+                self.reloadImage()
+
+    def pa_componentInfect(self):
         print(self.infectedTime)
+        self._Changlife()
         if self.colour == 1 or self.colour == 2:
+            self.pa_eruption()
             if self.can_infectOther:
-                self.immunity -= 1
                 for people in GameVar.peoples:
                     if self.hit(people):
                         infected_probability = random.random()
@@ -248,35 +272,37 @@ class Peoples(CharacterObject):
                                 GameVar.patients.append(people)
                                 GameVar.peoples.remove(people)
                             self.CanInfectOther_qm()
-        if self.I_am_patient_qm():
-            self.colour = 1
 
-    def eruption(self):
-        if self.infectedTime is not None:
-            if self.colour == 1:
-                incubation_period = random.randint(1, 3)
-                if isActionTime(self.infectedTime, incubation_period * one_day):
-                    self.colour = 2
-                    self.reloadImage()
-
-    def paint(self):
+    def a_paint(self):
         if not self.in_hospital:
             canvas.blit(self.load_image, (self.x, self.y))
         if self.in_hospital:
             ...
 
-    def I_am_patient_qm(self):
-        if self.colour == 1 or self.colour == 2:
-            self.infectedTime = time.time()
-            return True
-        else:
-            return False
-
-    def Death(self):
+    def _a_Death(self):
         super().Death()
 
-    def Changlife(self):
+    def _Changlife(self):
         super().Changlife()
+        self._a_Death()
+
+
+class Keystrokes(object):
+    def __init__(self, x, y, width, height, text, bgcolour, function):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.text = text
+        self.bgcolour = bgcolour
+        self.function = function
+
+    def button(self):
+        for event in pygame.event.get():
+            if event.type == MOUSEBUTTONDOWN:
+                if self.x <= event.pos[0] <= self.x+self.width:
+                    if self.y <= event.pos[1] <= self.y+self.height:
+                        self.function()
 
 
 """
@@ -311,7 +337,7 @@ def login():
             new_list.append(line)
 
         userDatas = new_list
-        print(userDatas)
+        # print(userDatas)
     """
     userName = easygui.enterbox("输入用户名", title="请登陆")
     for userData in userDatas:
@@ -341,7 +367,7 @@ def login():
             fields = ["输入用户名", "输入密码", "确认密码"]
             account = list()
             account = easygui.multenterbox(massage, title, fields)
-            print("account=={}".format(account))
+            # print("account=={}".format(account))
             if account[1] == account[2]:
                 over = True
                 easygui.msgbox("用户创建成功！", title="提示")
@@ -429,15 +455,10 @@ def showData():
 
 def ChangingProperties():
     for patient in GameVar.patients:
-        patient.componentInfect()
-        patient.eruption()
-        patient.Death()
+        patient.pa_componentInfect()
         patient.reloadImage()
 
     for people in GameVar.peoples:
-        people.componentInfect()
-        people.eruption()
-        people.I_am_patient_qm()
         people.reloadImage()
 
 
@@ -446,22 +467,22 @@ def controlState():
         key = starter()
         if type(key) == str:
             GameVar.state = GameVar.STATES[key]
-            print(key)
+            # print(key)
         handleEvent()
 
     if GameVar.state == GameVar.STATES["LOGIN"]:
         key = login()
         if type(key) == str:
             GameVar.state = GameVar.STATES[key]
-            print(key)
+            # print(key)
         handleEvent()
 
     if GameVar.state == GameVar.STATES["RUNNING"]:
+        showData()
         handleEvent()
         componentPaint()
         componentMove()
         ChangingProperties()
-        showData()
     if GameVar.state == GameVar.STATES["PAUSE"]:
         componentPaint()
 
@@ -477,13 +498,13 @@ def testFunction():
         handleEvent()
 
 
-demoName = "__main__"
-if demoName == "__main__":
+demo = "test"
+if demo == "__main__":
     generate(50)
     while True:
         pygame.display.update()
         handleEvent()
         controlState()
 
-if demoName == "test":
+if demo == "test":
     testFunction()
