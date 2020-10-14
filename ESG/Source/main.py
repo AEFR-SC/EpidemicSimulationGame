@@ -41,7 +41,7 @@ canvas.fill((255, 255, 255))
 pygame.display.set_caption("疫情模拟游戏ESG")
 bg_path = "..\\data\\images\\bg.png"
 bg = pygame.image.load(bg_path)
-one_day = 10
+one_day = 5
 
 
 # 设置退出方式以及键鼠交互
@@ -237,9 +237,25 @@ class Peoples(CharacterObject):
         self.go_to_hospital_lastTime = 0
         self.eruption_lastTime = 0
 
+        class InfectedTime(object):  # 这个类仅仅为了让infectedTime只更改一次......
+            def __init__(self):
+                self._infectedTime = time.time()
+                self.fre = 0
+
+            def read(self):
+                return self._infectedTime
+
+            def write(self, new):
+                if self.fre == 0:
+                    self._infectedTime = new
+                    self.fre = 1
+                if self.fre != 0:
+                    ...
+        self.infectedTime = InfectedTime()
+
     def _pe_I_am_patient_qm(self):
         if self.colour == 1 or self.colour == 2 and self.init_colour == 0:
-            self.infectedTime = time.time()
+            self.infectedTime.write(time.time())
             self.init_colour = -1  # init_colour用不到了
             print(self.init_colour)
             return True
@@ -247,15 +263,17 @@ class Peoples(CharacterObject):
             return True
 
     def pa_eruption(self):
-        if self._pe_I_am_patient_qm():
-            incubation_period = random.randint(1, 3)
-            if isActionTime(self.infectedTime, incubation_period * one_day):
-                print(isActionTime(self.infectedTime, incubation_period * one_day))
+        self._pe_I_am_patient_qm()
+        if self.infectedTime.read() != 0:
+            print("intro")
+            incubation_period = random.randint(7, 14)
+            if isActionTime(self.infectedTime.read(), incubation_period * one_day):  # TODO:isActionTime一直为False
+                print(isActionTime(self.infectedTime.read(), incubation_period * one_day))
                 self.colour = 2
                 self.reloadImage()
 
     def pa_componentInfect(self):
-        print(self.infectedTime)
+        print(self.infectedTime.read())
         self._Changlife()
         if self.colour == 1 or self.colour == 2:
             self.pa_eruption()
@@ -300,8 +318,8 @@ class Keystrokes(object):
     def button(self):
         for event in pygame.event.get():
             if event.type == MOUSEBUTTONDOWN:
-                if self.x <= event.pos[0] <= self.x+self.width:
-                    if self.y <= event.pos[1] <= self.y+self.height:
+                if self.x <= event.pos[0] <= self.x + self.width:
+                    if self.y <= event.pos[1] <= self.y + self.height:
                         self.function()
 
 
@@ -488,7 +506,7 @@ def controlState():
 
 
 def testFunction():
-    generate(100)
+    generate()
     while True:
         showData()
         componentPaint()
@@ -498,7 +516,7 @@ def testFunction():
         handleEvent()
 
 
-demo = "test"
+demo = "__main__"
 if demo == "__main__":
     generate(50)
     while True:
