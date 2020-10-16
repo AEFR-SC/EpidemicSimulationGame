@@ -2,7 +2,7 @@
 """
 Created by 范嘉宁 on 2020.9.25
 项目名称：疫情模拟游戏ESG(EpidemicSimulationGame, ESG, 直译流行病模拟游戏)
-Version 2.0.0(Release)
+Version 2.1.0(Release)
 使用环境： Anaconda 3(Python3.7)
 IDE信息如下：
 PyCharm 2020.1 (Professional Edition)
