@@ -40,6 +40,14 @@ def play(name):
     pygame.mixer.music.play()
     pygame.mixer.music.rewind()
 
+    pygame.mixer.music.load("..\\data\\musics\\" + name + ".ogg")
+    pygame.mixer.music.play()
+    pygame.mixer.music.rewind()
+
+    pygame.mixer.music.load("..\\data\\musics\\" + name + ".ogg")
+    pygame.mixer.music.play()
+    pygame.mixer.music.rewind()
+
 
 # 设置窗口
 bgWidth = 480 * 3
@@ -54,11 +62,21 @@ one_day = 5
 
 # 设置状态变化条件
 def handleEvent():
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT or event.type == KEYDOWN and event.key == K_ESCAPE:
+            judgment = easygui.boolbox("是否退出游戏?", "注意", ["确定退出", "算了，再玩会儿"])
+            if judgment:
+                pygame.quit()
+                sys.exit()
+            else:
+                ...
     if GameVar.state == GameVar.STATES["RUNNING"]:
         if len(GameVar.peoples) == 0:
+            time.sleep(2)
             GameVar.state = GameVar.STATES["LOSE"]
         if len(GameVar.patients) == 0:
             if len(hospital.peoples) == 0:
+                time.sleep(2)
                 GameVar.state = GameVar.STATES["WIN"]
 
 
@@ -115,28 +133,9 @@ class GameVar(object):
     paintInterval = 0.1
     bg = bg
     keystrokes = []
-
-
-"""
-class Hospital(object):
-    def __init__(self):
-        self.responsiveness = 2 * one_day
-        self.queue = []
-        self.peoples = []
-        self.doctors = GameVar.doctors
-
-    def run(self):
-        for doctor in GameVar.doctors:
-            doctor.heal()
-
-    def moreDoctor(self):
-        dx = 50 - 20
-        dy = random.randint(0, bgHeight - 20)
-        GameVar.doctors.append(Doctor(dx, dy, 20, 20))
-
-
-hospital = Hospital()
-"""
+    playLastTime = 0
+    playInterval = 1 * 60 + 50
+    UserName = None
 
 
 class Hospital(object):
@@ -380,12 +379,11 @@ def starter():
     canvas.blit(pygame.image.load(img_path), (bgWidth / 2 - 486 / 2, bgHeight / 2 - 188 / 2))
     for event in pygame.event.get():
         if event.type == MOUSEBUTTONDOWN and 511 <= event.pos[0] <= (511 + 486) and 366 <= event.pos[1] <= (366 + 188):
-            return "RUNNING"
+            return "LOGIN"
         else:
             return "START"
 
 
-"""
 def login():
     with open("..\\data\\user_data\\user_data.csv", mode="r", encoding="utf-8") as allUserData:
         # readlines[line1, line2, line3...]
@@ -402,7 +400,7 @@ def login():
 
         userDatas = new_list
         # print(userDatas)
-    \"\"\"
+    """
     userName = easygui.enterbox("输入用户名", title="请登陆")
     for userData in userDatas:
         if userData[0] == userName:
@@ -421,7 +419,7 @@ def login():
                 print("account=={}".format(account))
                 if account[1] == account[2]:
                     easygui.msgbox("用户创建成功！", title="提示")
-    \"\"\"
+    """
     register = easygui.boolbox("请选择", choices=["注册", "登录"])
     over = False
     while not over:
@@ -448,7 +446,6 @@ def login():
                         GameVar.UserName = indata[0]
                         over = True
     return "RUNNING"
-"""
 
 
 def generate(number=1):
@@ -557,6 +554,11 @@ def componentRun():
         doctor.run()
 
 
+def SaveData():
+    with open("..\\data\\user_data\\" + str(GameVar.UserName) + ".log", mode="a", encoding="utf-8") as file:
+        file.write(str(time.time()) + " " + str(GameVar.state)+ "\n")
+
+
 def controlState():
     if GameVar.state == GameVar.STATES["START"]:
         key = starter()
@@ -564,17 +566,17 @@ def controlState():
             GameVar.state = GameVar.STATES[key]
             # print(key)
         handleEvent()
-    """
+
     if GameVar.state == GameVar.STATES["LOGIN"]:
         key = login()
         if type(key) == str:
             GameVar.state = GameVar.STATES[key]
             # print(key)
         handleEvent()
-    """
 
     if GameVar.state == GameVar.STATES["RUNNING"]:
         componentRun()
+        handleEvent()
 
     if GameVar.state == GameVar.STATES["LOSE"]:
         handleEvent()
@@ -587,6 +589,7 @@ def controlState():
         del img
         for event in pygame.event.get():
             if event.type == MOUSEBUTTONDOWN:
+                SaveData()
                 pygame.quit()
                 sys.exit()
 
@@ -601,6 +604,7 @@ def controlState():
         del img
         for event in pygame.event.get():
             if event.type == MOUSEBUTTONDOWN:
+                SaveData()
                 pygame.quit()
                 sys.exit()
 
@@ -610,8 +614,6 @@ if __name__ == "__main__":
     play("1")
     while True:
         pygame.display.update()
-        pygame.display.reason()
+        pygame.time.delay(15)
         controlState()
         handleEvent()
-        print(hospital.beds)
-        print(hospital.peoples)
