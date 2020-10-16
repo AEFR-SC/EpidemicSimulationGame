@@ -2,7 +2,7 @@
 """
 Created by 范嘉宁 on 2020.9.25
 项目名称：疫情模拟游戏ESG(EpidemicSimulationGame, ESG, 直译流行病模拟游戏)
-Version 1.0.0(Release)
+Version 2.0.0(Release)
 使用环境： Anaconda 3(Python3.7)
 IDE信息如下：
 PyCharm 2020.1 (Professional Edition)
@@ -29,10 +29,17 @@ import easygui
 from pygame.locals import *
 import random
 import time
-import music
 import threading
 
 pygame.init()
+pygame.mixer.init()
+
+
+def play(name):
+    pygame.mixer.music.load("..\\data\\musics\\" + name + ".ogg")
+    pygame.mixer.music.play()
+    pygame.mixer.music.rewind()
+
 
 # 设置窗口
 bgWidth = 480 * 3
@@ -45,47 +52,14 @@ bg = pygame.image.load(bg_path)
 one_day = 5
 
 
-# 设置退出方式以及键鼠交互以及状态变化条件
+# 设置状态变化条件
 def handleEvent():
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
-            judgment = easygui.boolbox("是否退出游戏?", "注意", ["确定退出", "算了，再玩会儿"])
-            if judgment:
-                pygame.quit()
-                sys.exit()
-            else:
-                ...
-
-        if event.type == MOUSEMOTION:
-            if isMouseIn(event.pos[0], event.pos[1]):
-                # print('MouseIn')
-                if GameVar.state == GameVar.STATES['PAUSE']:
-                    GameVar.state = GameVar.STATES['RUNNING']
-            if isMouseOut(event.pos[0], event.pos[1]):
-                # print('MouseOut')
-                if GameVar.state == GameVar.STATES['RUNNING']:
-                    GameVar.state = GameVar.STATES['PAUSE']
-
     if GameVar.state == GameVar.STATES["RUNNING"]:
         if len(GameVar.peoples) == 0:
             GameVar.state = GameVar.STATES["LOSE"]
         if len(GameVar.patients) == 0:
+            if len(hospital.peoples) == 0:
                 GameVar.state = GameVar.STATES["WIN"]
-
-
-
-def isMouseOut(x, y):
-    if x >= (bgWidth - 20) or x <= 20 or y >= (bgHeight) or y <= 20:
-        return True
-    else:
-        return False
-
-
-def isMouseIn(x, y):
-    if 1 < x < bgWidth and 1 < y < bgHeight:
-        return True
-    else:
-        return False
 
 
 def isActionTime(lastTime, interval):
@@ -109,9 +83,23 @@ def write(text, pos, size, colour=(0, 0, 0), font="微软雅黑"):
     canvas.blit(MyFont, pos)
 
 
+class Const:
+    def __init__(self, value):
+        self._value = value
+        self.canWrite = True
+
+    def read(self):
+        return self._value
+
+    def write(self, new):
+        if self.canWrite:
+            self._value = new
+            self.canWrite = False
+
+
 # 游戏变量
 class GameVar(object):
-    STATES = {"START": 0, "LOGIN": 2, "RUNNING": 3, "PAUSE": 4, "WIN": 5, "LOSE": 6,
+    STATES = {"START": 0, "LOGIN": 2, "RUNNING": 3, "WIN": 5, "LOSE": 6,
               "QUIT": 7}  # TODO：QUIT涉及到存储对象序列化，暂时没做
     state = STATES["START"]
     RO = 4
@@ -125,10 +113,8 @@ class GameVar(object):
         if patient.colour == 2: symptoms.append(1)
     paintLastTime = 0
     paintInterval = 0.1
-    hospitalResponsiveness = 2 * one_day
-    hospitalQueue = []
-    hospitalBeds = 12
     bg = bg
+    keystrokes = []
 
 
 """
@@ -151,6 +137,23 @@ class Hospital(object):
 
 hospital = Hospital()
 """
+
+
+class Hospital(object):
+    def __init__(self):
+        self.responsiveness = 2 * one_day
+        self.peoples = []
+        self.beds = 12
+
+    def morebeds(self):
+        self.beds += 1
+
+    def run(self):
+        if len(self.peoples) >= self.beds:
+            self.morebeds()
+
+
+hospital = Hospital()
 
 
 # noinspection PyChainedComparisons
@@ -232,19 +235,7 @@ class Doctor(CharacterObject):
         self.attribute = self.attributeDict["Doctor"]["Health"]
         self.immunity = 500
 
-        class HealLT:
-            def __init__(self):
-                self._h = time.time()
-                self.can = False
-
-            def read(self):
-                return self._h
-
-            def write(self, new):
-                if self.can:
-                    self._h = new
-
-        self.healLT = HealLT()
+        self.healLT = Const(time.time())
 
     def move(self, step, direction=random.randint(0, 1)):
         if direction == 0: self.y -= step
@@ -255,89 +246,60 @@ class Doctor(CharacterObject):
         if self.y >= bgHeight: self.y = bgHeight / 2 - self.y
 
     def heal(self):
-        for patient in GameVar.patients:
+        for patient in hospital.peoples:
             if isActionTime(self.healLT.read(), 10):
-                self.healLT.can = True
-                print("god")
+                self.healLT.canWrite = True
                 patient.life += 10
                 if patient.defensive >= 3000:
                     patient.colour = 0
-                    GameVar.patients.remove(patient)
+                    patient.in_hospital = False
+                    try:
+                        GameVar.patients.remove(patient)
+                        hospital.peoples.remove(patient)
+                    except ValueError as e:
+                        print(e)
                     GameVar.peoples.append(patient)
             self.healLT.write(time.time())
+            self.healLT.canWrite = False
 
     def run(self):
-        self.move(random.randint(0, 5))
-        self.reset_pos()
+        self.paint()
         self.heal()
+        a = random.randint(0, 100000)
+        if a == 9999:
+            self.colour = self.colourDict["ds"]
 
 
 class Peoples(CharacterObject):
     def __init__(self, x, y, width, height, colour):
         super().__init__(x, y, width, height, colour)
 
-        class InfectedTime(object):  # 这个类仅仅为了让infectedTime只能更改一次......
-            def __init__(self):
-                self._infectedTime = time.time()
-                self.fre = 0
-
-            def read(self):
-                return self._infectedTime
-
-            def write(self, new):
-                if self.fre == 0:
-                    self._infectedTime = new
-                    self.fre = 1
-                if self.fre != 0:
-                    ...
-
-        self.infectedTime = InfectedTime()
-
-        class EruptionTime:
-            def __init__(self):
-                self._eruptionTime = time.time()
-                self.fre = 0
-
-            def read(self):
-                return self._eruptionTime
-
-            def write(self, new):
-                # print(self.fre)
-                if self.fre == 0:
-                    self._eruptionTime = new
-                    self.fre = 1
-                if self.fre != 0:
-                    ...
-
-        self.eruptionTime = EruptionTime()
+        self.infectedTime = Const(time.time())
+        self.eruptionTime = Const(time.time())
+        self.in_hospital = False
 
     def _pe_I_am_patient_qm(self):
-        if self.colour == 1 or self.colour == 2 and self.init_colour == 0:
+        if self.colour == 1 or self.colour == 2:
             self.infectedTime.write(time.time())
-            self.init_colour = -1  # init_colour用不到了
             return True
 
     def pa_eruption(self):
-        if self.colour == 1:
-            if self.infectedTime.read() != 0:
-                incubation_period = 7
-                if isActionTime(self.infectedTime.read(), incubation_period * one_day):
-                    # print(isActionTime(self.infectedTime.read(), incubation_period * one_day))
-                    self.colour = 2
-                    self.reloadImage()
+        if self._pe_I_am_patient_qm():
+            if self.colour == 1:
+                if self.infectedTime.read() != 0:
+                    incubation_period = 7
+                    if isActionTime(self.infectedTime.read(), incubation_period * one_day):
+                        # print(isActionTime(self.infectedTime.read(), incubation_period * one_day))
+                        self.colour = 2
+                        self.reloadImage()
 
-    """
     def pa_goToHos(self):
         if self.colour == 2:
             self.eruptionTime.write(time.time())
-            # print(self.eruptionTime.read())
-            hospital.queue.append(self)
-            if isActionTime(self.eruptionTime.read(), hospital.responsiveness + len(hospital.queue)):
-                print("intro")
+            print("gotohos")
+            if isActionTime(self.eruptionTime.read(), hospital.responsiveness):
                 hospital.peoples.append(self)
-                GameVar.patients.remove(self)
                 self.in_hospital = True
-    """
 
     def pa_componentInfect(self):
         if self.colour == 1 or self.colour == 2:
@@ -359,28 +321,26 @@ class Peoples(CharacterObject):
     def a_paint(self):
         canvas.blit(self.load_image, (self.x, self.y))
 
-    """
     def run(self):
-        if self.colour == 1: self.pa_eruption()
-        if self.colour == 1 or self.colour == 2:
-            if not self.in_hospital:
+        if not self.in_hospital:
+            if self.colour == 1: self.pa_eruption()
+            if self.colour == 1 or self.colour == 2:
                 directions = [0, 1, 2, 3]  # 0.left, 1.right, 2.up, 3.down
                 direction = random.choice(directions)
                 self.pa_componentInfect()
                 self.move(direction)
+                self.reset_pos()
                 self.paint()
                 if self.colour == 2:
                     self.pa_goToHos()
-            if self.in_hospital:
-                print(self.defensive)
-                self._Changelife()
 
-        if self.colour == 0:
-            directions = [0, 1, 2, 3]  # 0.left, 1.right, 2.up, 3.down
-            direction = random.choice(directions)
-            self.move(direction)
-            self.paint()
-        """
+            if self.colour == 0:
+                directions = [0, 1, 2, 3]  # 0.left, 1.right, 2.up, 3.down
+                direction = random.choice(directions)
+                self.move(direction)
+                self.paint()
+        if self.in_hospital:
+            ...
 
 
 class Keystrokes(object):
@@ -530,21 +490,6 @@ def componentPaint():
     pygame.display.update()
 
 
-def componentMove():
-    """随机移动"""
-    for people in GameVar.peoples:
-        directions = [0, 1, 2, 3]  # 0.left, 1.right, 2.up, 3.down
-        direction = random.choice(directions)
-        people.move(direction)
-    for patient in GameVar.patients:
-        directions = [0, 1, 2, 3]  # 0.left, 1.right, 2.up, 3.down
-        direction = random.choice(directions)
-        patient.move(direction)
-    for doctor in GameVar.doctors:
-        directions = [0, 1]
-        doctor.move(random.randint(0, 10), random.choice(directions))
-
-
 def showData():
     symptoms = []
     asymptomatic = []
@@ -556,6 +501,7 @@ def showData():
     write("symptoms:{}".format(len(symptoms)), (400, 0), 40, (255, 0, 0))
     write("asymptomatic:{}".format(len(asymptomatic)), (600, 0), 40, (127, 127, 0))
     write("doctors:{}".format(len(GameVar.doctors)), (850, 0), 40, (0, 0, 255))
+    write("In Hospital:{}".format(len(hospital.peoples)), (1000, 0), 40, (100, 100, 100))
 
 
 def moreDoctor():
@@ -564,9 +510,25 @@ def moreDoctor():
     GameVar.doctors.append(Doctor(dx, dy, 20, 20))
 
 
+def quit():
+    judgment = easygui.boolbox("是否退出游戏?", "注意", ["确定退出", "算了，再玩会儿"])
+    if judgment:
+        pygame.quit()
+        sys.exit()
+    else:
+        ...
+
+
+a_lastTime = time.time()
+
+
 def buttons():
-    button_MoreDoctor = Keystrokes(50, bgHeight - 22, "More Doctor", (0, 255, 255), moreDoctor)
-    button_MoreDoctor.run()
+    k1 = Keystrokes(50, bgHeight - 30, "More Doctor", (0, 255, 255), moreDoctor)
+    k2 = Keystrokes(k1.x + k1.width + 10, bgHeight - 30, "More People", (0, 255, 0), generate)
+    k3 = Keystrokes(k2.x + k2.width + 10, bgHeight - 30, "More Beds", (52, 255, 200), hospital.morebeds)
+    k1.run()
+    k2.run()
+    k3.run()
 
 
 def ChangingProperties():
@@ -581,6 +543,18 @@ def ChangingProperties():
         people.reloadImage()
     for doctor in GameVar.doctors:
         doctor.heal()
+
+
+def componentRun():
+    showData()
+    ChangingProperties()
+    buttons()
+    for patient in GameVar.patients:
+        patient.run()
+    for people in GameVar.peoples:
+        people.run()
+    for doctor in GameVar.doctors:
+        doctor.run()
 
 
 def controlState():
@@ -600,30 +574,17 @@ def controlState():
     """
 
     if GameVar.state == GameVar.STATES["RUNNING"]:
-        handleEvent()
-        componentPaint()
-        componentMove()
-        ChangingProperties()
-
-    if GameVar.state == GameVar.STATES["PAUSE"]:
-        componentPaint()
-        showData()
-        buttons()
+        componentRun()
 
     if GameVar.state == GameVar.STATES["LOSE"]:
         handleEvent()
         canvas.blit(bg, (0, 0))
         _path = "..\\data\\images\\LOSE.png"
         img = pygame.image.load(_path)
-        write("YOU LOSE!\nMouse click to exit", (0, 0), 40, (0, 0, 0))
+        write("YOU LOSE!  Mouse click to exit", (0, 0), 40, (0, 0, 0))
         canvas.blit(img, (200, 200))
         del _path
         del img
-        """
-        play = threading.Thread(target=music.play, args=("LOSE",))
-        play.start()
-        play.join()
-        """
         for event in pygame.event.get():
             if event.type == MOUSEBUTTONDOWN:
                 pygame.quit()
@@ -634,15 +595,10 @@ def controlState():
         canvas.blit(bg, (0, 0))
         _path = "..\\data\\images\\WIN.png"
         img = pygame.image.load(_path)
-        write("YOU WIN!\nMouse click to exit", (0, 0), 40, (0, 0, 0))
+        write("YOU WIN!  Mouse click to exit", (0, 0), 40, (0, 0, 0))
         canvas.blit(img, (200, 200))
         del _path
         del img
-        """
-        play = threading.Thread(target=music.play, args=("WIN", ))
-        play.start()
-        play.join()
-        """
         for event in pygame.event.get():
             if event.type == MOUSEBUTTONDOWN:
                 pygame.quit()
@@ -651,7 +607,11 @@ def controlState():
 
 if __name__ == "__main__":
     generate(50)
+    play("1")
     while True:
         pygame.display.update()
+        pygame.display.reason()
         controlState()
         handleEvent()
+        print(hospital.beds)
+        print(hospital.peoples)
